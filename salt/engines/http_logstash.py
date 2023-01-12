@@ -20,6 +20,8 @@ them onto a logstash endpoint via HTTP requests.
         engines:
           - http_logstash:
               url: http://blabla.com/salt-stuff
+              headers:
+                  mytestheader: myvalue
               tags:
                   - salt/job/*/new
                   - salt/job/*/ret/*
@@ -37,14 +39,14 @@ import salt.utils.json
 _HEADERS = {"Content-Type": "application/json"}
 
 
-def _logstash(url, data):
+def _logstash(url, headers, data):
     """
     Issues HTTP queries to the logstash server.
     """
     result = salt.utils.http.query(
         url,
         "POST",
-        header_dict=_HEADERS,
+        header_dict=headers,
         data=salt.utils.json.dumps(data),
         decode=True,
         status=True,
@@ -53,12 +55,16 @@ def _logstash(url, data):
     return result
 
 
-def start(url, funs=None, tags=None):
+def start(url, headers=None, funs=None, tags=None):
     """
     Listen to salt events and forward them to logstash.
 
     url
         The Logstash endpoint.
+
+    headers: ``None``
+        Add additional headers to send with the http request.
+        Be default, Content-Type: application/json is sent.
 
     funs: ``None``
         A list of functions to be compared against, looking into the ``fun``
@@ -86,6 +92,10 @@ def start(url, funs=None, tags=None):
             event = event_bus.get_event(full=True)
             if event:
                 publish = True
+                if headers and isinstance(headers, dict):
+                    headers = _HEADERS.update(headers)
+                else:
+                    headers = _HEADERS
                 if tags and isinstance(tags, list):
                     found_match = False
                     for tag in tags:
@@ -96,4 +106,4 @@ def start(url, funs=None, tags=None):
                     if not event["data"]["fun"] in funs:
                         publish = False
                 if publish:
-                    _logstash(url, event["data"])
+                    _logstash(url, headers, event["data"])
